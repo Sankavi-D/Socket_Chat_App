@@ -1,58 +1,91 @@
-const express = require('express')
-const path = require('path')
-const app = express()
+const express = require('express');
+const path = require('path');
+const mongoose = require('mongoose');
+const { User, Room, Message } = require('./models');
+const app = express();
 
 require('dotenv').config();
-const PORT = process.env.PORT || 4000
-const server = app.listen(PORT, () => console.log(`Server running on port ${PORT}`))
+const PORT = process.env.PORT || 4000;
 
-const io = require('socket.io')(server)
+// Connect to MongoDB
+mongoose.connect('mongodb://localhost:27017/chatapp', {
+  useNewUrlParser: true,
+  useUnifiedTopology: true
+});
+mongoose.connection.once('open', () => {
+  console.log('Connected to MongoDB');
+});
 
-app.use(express.static(path.join(__dirname, 'public')))
+const server = app.listen(PORT, () => console.log(`💬 server on port ${PORT}`));
 
-let socketsConected = new Map()
+const io = require('socket.io')(server);
 
-io.on('connection', onConnected)
+app.use(express.static(path.join(__dirname, 'public')));
 
-function onConnected(socket) {
-  console.log('Socket connected: ', socket.id)
-  socketsConected.set(socket.id, { socket: socket, name: 'anonymous' })
-  // socketsConected.add(socket.id)
-  io.emit('clients-total', socketsConected.size)
+io.on('connection', async (socket) => {
+  console.log('Socket connected', socket.id);
 
-  socket.on('disconnect', () => {
-    console.log('Socket disconnected: ', socket.id)
-    socketsConected.delete(socket.id)
-    io.emit('clients-total', socketsConected.size)
-  })
-
-  socket.on('register-name', (name) => {
-    if (socketsConected.has(socket.id)) {
-      socketsConected.get(socket.id).name = name
+  // Register user to a room
+  socket.on('register', async ({ name, roomName }) => {
+    let room = await Room.findOne({ roomName });
+    if (!room) {
+      room = new Room({ roomName, userIds: [] });
+      await room.save();
     }
-  })
 
-  socket.on('message', (data) => {
-    // console.log(data)
-    // socket.broadcast.emit('chat-message', data)
-    const { targetId, message } = data
-    if (targetId && socketsConected.has(targetId)) {
-      socketsConected.get(targetId).socket.emit('chat-message', {
-        message: message,
-        name: socketsConected.get(socket.id).name,
-        dateTime: new Date(),
-        from: socket.id
-      })
+    let user = await User.findOne({ name, roomId: room._id });
+    if (!user) {
+      user = new User({ name, socketId: socket.id, roomId: room._id });
+      await user.save();
     } else {
-      socket.broadcast.emit('chat-message', {
-        message: message,
-        name: socketsConected.get(socket.id).name,
-        dateTime: new Date()
-      })
+      user.socketId = socket.id;
+      await user.save();
     }
-  })
 
+    // Join the room
+    socket.join(room.roomName);
+    io.to(room.roomName).emit('message', { name: 'System', message: `${name} has joined the room` });
+  });
+
+  // Handle disconnection
+  socket.on('disconnect', async () => {
+    console.log('Socket disconnected', socket.id);
+    const user = await User.findOne({ socketId: socket.id });
+    if (user) {
+      const room = await Room.findById(user.roomId);
+      io.to(room.roomName).emit('message', { name: 'System', message: `${user.name} has left the room` });
+    }
+  });
+
+  // Handle incoming messages
+  socket.on('message', async (data) => {
+    const user = await User.findOne({ socketId: socket.id });
+    if (user) {
+      const room = await Room.findById(user.roomId);
+      const message = new Message({
+        roomId: room._id,
+        senderId: user._id,
+        message: data.message,
+        dateTime: new Date()
+      });
+      await message.save();
+      io.to(room.roomName).emit('chat-message', message);
+    }
+  });
+
+  // Handle typing feedback
   socket.on('feedback', (data) => {
-    socket.broadcast.emit('feedback', data)
-  })
-}
+    const user = User.findOne({ socketId: socket.id });
+    if (user) {
+      const room = Room.findById(user.roomId);
+      socket.to(room.roomName).emit('feedback', data);
+    }
+  });
+
+  // Handle message read
+  socket.on('message-read', async (messageId) => {
+    await Message.updateOne({ _id: messageId }, { isRead: true });
+  });
+});
+
+module.exports = server;

@@ -139,3 +139,37 @@ body {
   margin: 20px 0;
   color: #7e7e7e;
 }
+
+.message-right .message {
+  background-color: #2d2d2d;
+  color: #f6f6f6;
+  border-radius: 20px 20px 0px 20px;
+  align-self: flex-end;
+  box-shadow: 2px 2px 4px #dcdcdc;
+}
+
+.message-left .message {
+  background-color: #fff;
+  color: #2d2d2d;
+  border-radius: 20px 20px 20px 0px;
+  align-self: flex-start;
+  box-shadow: -2px 2px 4px #dcdcdc;
+}
+
+/* Add styles for .message-item */
+.message-item {
+  list-style: none;
+  padding: 8px 12px;
+  margin: 12px;
+  max-width: 250px;
+  font-size: 18px;
+  word-wrap: break-word;
+}
+
+.message-right .message > span,
+.message-left .message > span {
+  display: block;
+  font-style: italic;
+  font-size: 12px;
+  margin-top: 4px;
+}

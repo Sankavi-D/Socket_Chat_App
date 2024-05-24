@@ -1,17 +1,27 @@
-const mongoose = require('mongoose')
+const mongoose = require('mongoose');
+const Schema = mongoose.Schema;
 
-const userSchema = new mongoose.Schema({
-  name: { type: String, required: true },
-  socketId: { type: String, required: true },
-  roomId: { type: mongoose.Schema.Types.ObjectId, ref: 'Room', required: true },
-})
+const UserSchema = new Schema({
+  name: String,
+  socketId: String,
+  roomId: { type: Schema.Types.ObjectId, ref: 'Room' }
+});
 
-const roomSchema = new mongoose.Schema({
-  userIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
-  roomName: { type: String, required: true, unique: true },
-})
+const RoomSchema = new Schema({
+  roomName: String,
+  userIds: [{ type: Schema.Types.ObjectId, ref: 'User' }]
+});
 
-const User = mongoose.model('User', userSchema)
-const Room = mongoose.model('Room', roomSchema)
+const MessageSchema = new Schema({
+  roomId: { type: Schema.Types.ObjectId, ref: 'Room' },
+  senderId: { type: Schema.Types.ObjectId, ref: 'User' },
+  message: String,
+  dateTime: { type: Date, default: Date.now },
+  isRead: { type: Boolean, default: false }
+});
 
-module.exports = { User, Room }
+const User = mongoose.model('User', UserSchema);
+const Room = mongoose.model('Room', RoomSchema);
+const Message = mongoose.model('Message', MessageSchema);
+
+module.exports = { User, Room, Message };
